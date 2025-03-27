@@ -42,7 +42,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1;
+renderer.toneMappingExposure = .3;
 document.body.appendChild(renderer.domElement);
 
 // Bloom Composer
@@ -53,7 +53,7 @@ composer.addPass(bloomPass);
 //bloomPass.renderToScreen = true;
 
 // Lighting - Hollywood glow style
-const ambientLight = new THREE.AmbientLight(0x5c0b78, .1);
+const ambientLight = new THREE.AmbientLight(0x5c0b78, .5);
 scene.add(ambientLight);
 
 const directionalLight = new THREE.DirectionalLight(0xebf8f9, .1);
