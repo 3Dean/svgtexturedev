@@ -13,6 +13,17 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
 
+document.getElementById('startButton').addEventListener('click', async () => {
+    if (THREE.AudioContext) {
+      THREE.AudioContext.getContext().resume();
+    }
+  
+    document.getElementById('startButton').style.display = 'none';
+    await init(); // Start the fun!
+  });
+  
+  async function init() {
+
 function loadSVGTexture(svgUrl, width = 1024, height = 1024) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -75,6 +86,7 @@ const textureLoader = new THREE.TextureLoader();
 const normalMap = textureLoader.load('./images/officeobject_normal.png');
 const metalnessMap = textureLoader.load('./images/officeobject_metallic.png');
 //const emissiveMap = textureLoader.load('./images/officeobject_emission.png');
+/*
 const emissiveFrames = [
     textureLoader.load('./images/officeobject_emission_1.png'),
     textureLoader.load('./images/officeobject_emission_2.png'),
@@ -82,6 +94,17 @@ const emissiveFrames = [
     textureLoader.load('./images/officeobject_emission_4.png'),
   ];
   emissiveFrames.forEach(tex => tex.encoding = THREE.sRGBEncoding);
+*/
+
+const emissiveMap = textureLoader.load('./images/officeobject_emission_spritesheet.png');
+  emissiveMap.encoding = THREE.sRGBEncoding;
+  emissiveMap.wrapS = THREE.RepeatWrapping;
+  emissiveMap.wrapT = THREE.RepeatWrapping;
+
+  const tilesHoriz = 4;
+  const tilesVert = 4;
+  const numTiles = tilesHoriz * tilesVert;
+  emissiveMap.repeat.set(1 / tilesHoriz, 1 / tilesVert);
 
   const exrLoader = new EXRLoader();
   exrLoader.load('./images/small_empty_room_3_1k.exr', (envMap) => {
@@ -97,35 +120,68 @@ const material = new THREE.MeshStandardMaterial({
   metalness: 1.0,  // Optional: use full metal if you want the metal map to control it
   roughness: 0.4,   // Adjust for smoother look
   emissive: new THREE.Color(0xffffff),
-  emissiveMap: emissiveFrames[0],
+  emissiveMap: emissiveMap,
   emissiveIntensity: 1.5
 });
-
 
   const cube = new THREE.Mesh(geometry, material);
   scene.add(cube);
 
-  let frameIndex = 0;
-  let frameTime = 0;
-  const frameDelay = 300;
+  // Web Audio Setup
+const listener = new THREE.AudioListener();
+camera.add(listener);
+
+const audio = new THREE.Audio(listener);
+const audioLoader = new THREE.AudioLoader();
+
+audioLoader.load('./audio/neonawakening.mp3', function(buffer) {
+  audio.setBuffer(buffer);
+  audio.setLoop(true);
+  audio.setVolume(1.0);
+  audio.play();
+});
+
+const analyser = new THREE.AudioAnalyser(audio, 128);
+
+
+  let currentTile = 0;
+  let lastFrameTime = 0;
+  const frameDuration = 400;
+
+  function updateSpriteFrame() {
+    const col = currentTile % tilesHoriz;
+    const row = Math.floor(currentTile / tilesHoriz);
+    emissiveMap.offset.set(col / tilesHoriz, 1 - (row + 1) / tilesVert);
+  }
 
   // Animate like it's auditioning for TRON
   function animate(time) {
     requestAnimationFrame(animate);
-    if (time - frameTime > frameDelay) {
-      frameTime = time;
-      frameIndex = (frameIndex + 1) % emissiveFrames.length;
-      material.emissiveMap = emissiveFrames[frameIndex];
-      material.needsUpdate = true;
-    }
+
+    const data = analyser.getFrequencyData();
+  const avg = analyser.getAverageFrequency();
+
+  // Emissive intensity from volume
+  material.emissiveIntensity = 0.5 + (avg / 256) * 1.5;
+
+  // Smooth hue cycling based on time and volume
+  const hue = (time * 0.0001 + avg / 512) % 1;
+  material.emissive.setHSL(hue, 1.0, 0.5);
+
+    if (time - lastFrameTime > frameDuration) {
+        lastFrameTime = time;
+        currentTile = (currentTile + 1) % numTiles;
+        updateSpriteFrame();
+      }
 
     cube.rotation.x = time * 0.0005;
-    cube.rotation.y = time * 0.001;
+    cube.rotation.y = time * 0.0004;
     controls.update();
     renderer.render(scene, camera);
     composer.render();
   }
 
+  updateSpriteFrame();
   animate();
 });
 })();
@@ -136,3 +192,4 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
 });
+  }
