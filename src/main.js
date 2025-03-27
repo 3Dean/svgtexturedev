@@ -25,6 +25,7 @@ function loadSVGTexture(svgUrl, width = 1024, height = 1024) {
       ctx.drawImage(img, 0, 0, width, height);
 
       const texture = new THREE.CanvasTexture(canvas);
+      texture.encoding = THREE.sRGBEncoding;
       resolve(texture);
     };
     img.onerror = () => console.error('Could not load SVG image');
@@ -73,35 +74,51 @@ controls.dampingFactor = 0.05;
 const textureLoader = new THREE.TextureLoader();
 const normalMap = textureLoader.load('./images/officeobject_normal.png');
 const metalnessMap = textureLoader.load('./images/officeobject_metallic.png');
-const emissiveMap = textureLoader.load('./images/officeobject_emission.png');
-emissiveMap.encoding = THREE.sRGBEncoding;
+//const emissiveMap = textureLoader.load('./images/officeobject_emission.png');
+const emissiveFrames = [
+    textureLoader.load('./images/officeobject_emission_1.png'),
+    textureLoader.load('./images/officeobject_emission_2.png'),
+    textureLoader.load('./images/officeobject_emission_3.png'),
+    textureLoader.load('./images/officeobject_emission_4.png'),
+  ];
+  emissiveFrames.forEach(tex => tex.encoding = THREE.sRGBEncoding);
 
   const exrLoader = new EXRLoader();
   exrLoader.load('./images/small_empty_room_3_1k.exr', (envMap) => {
     envMap.mapping = THREE.EquirectangularReflectionMapping;
     scene.environment = envMap;
 
-
 const geometry = new THREE.BoxGeometry(2, 2, 2);
 const material = new THREE.MeshStandardMaterial({
   map: texture,
   normalMap: normalMap,
   metalnessMap: metalnessMap,
-  emissiveMap: emissiveMap,
+  //emissiveMap: emissiveMap,
   metalness: 1.0,  // Optional: use full metal if you want the metal map to control it
   roughness: 0.4,   // Adjust for smoother look
   emissive: new THREE.Color(0xffffff),
-  emissiveIntensity: 1,
-  envMapIntensity: 0.8
+  emissiveMap: emissiveFrames[0],
+  emissiveIntensity: 1.5
 });
 
 
   const cube = new THREE.Mesh(geometry, material);
   scene.add(cube);
 
+  let frameIndex = 0;
+  let frameTime = 0;
+  const frameDelay = 300;
+
   // Animate like it's auditioning for TRON
   function animate(time) {
     requestAnimationFrame(animate);
+    if (time - frameTime > frameDelay) {
+      frameTime = time;
+      frameIndex = (frameIndex + 1) % emissiveFrames.length;
+      material.emissiveMap = emissiveFrames[frameIndex];
+      material.needsUpdate = true;
+    }
+
     cube.rotation.x = time * 0.0005;
     cube.rotation.y = time * 0.001;
     controls.update();
