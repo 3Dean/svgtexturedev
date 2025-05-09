@@ -19,10 +19,25 @@ document.getElementById('startButton').addEventListener('click', async () => {
     }
   
     document.getElementById('startButton').style.display = 'none';
+    const audioControls = document.getElementById('audioControls');
+    audioControls.style.display = 'block'; // Show audio controls
+    
+    // Ensure slider is updated after controls are visible and audio is likely to be set up
+    // We'll also set it again in the audio.load callback for robustness
+    const volumeSliderElement = document.getElementById('volumeSlider');
+    if (volumeSliderElement) {
+        // The audio object might not be fully ready here, but we can set the default HTML value
+        // The more reliable update will be in the audio.load callback
+    }
+
     await init(); // Start the fun!
   });
   
   async function init() {
+
+// Audio Controls - moved element retrieval inside init to ensure they are accessed after DOM is ready
+const playPauseButton = document.getElementById('playPauseButton');
+const volumeSlider = document.getElementById('volumeSlider');
 
 function loadSVGTexture(svgUrl, width = 1024, height = 1024) {
   return new Promise((resolve) => {
@@ -137,12 +152,34 @@ const audioLoader = new THREE.AudioLoader();
 audioLoader.load('./audio/neonawakening.mp3', function(buffer) {
   audio.setBuffer(buffer);
   audio.setLoop(true);
-  audio.setVolume(1.0);
+  audio.setVolume(0.5); // Set initial volume to 0.5
   audio.play();
+
+  // Update UI elements after audio is loaded and properties are set
+  if (playPauseButton) { 
+    playPauseButton.textContent = 'Pause'; // Audio starts playing
+  }
+  if (volumeSlider) { 
+    volumeSlider.value = 0.5; // Explicitly set slider to 0.5
+  }
 });
 
 const analyser = new THREE.AudioAnalyser(audio, 128);
 
+  // Event listeners are attached to elements retrieved at the start of init
+  playPauseButton.addEventListener('click', () => {
+    if (audio.isPlaying) {
+      audio.pause();
+      playPauseButton.textContent = 'Play';
+    } else {
+      audio.play();
+      playPauseButton.textContent = 'Pause';
+    }
+  });
+
+  volumeSlider.addEventListener('input', () => {
+    audio.setVolume(parseFloat(volumeSlider.value));
+  });
 
   let currentTile = 0;
   let lastFrameTime = 0;
