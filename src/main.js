@@ -63,12 +63,13 @@ document.body.appendChild(renderer.domElement);
 // Bloom Composer
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
+// Reduce bloom intensity to make material properties more visible
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.2, 0.1, 0.25);
 composer.addPass(bloomPass);
 //bloomPass.renderToScreen = true;
 
 // Lighting - Hollywood glow style
-const ambientLight = new THREE.AmbientLight(0x5c0b78, .5);
+const ambientLight = new THREE.AmbientLight(0x5c0b78, .4);
 scene.add(ambientLight);
 
 const directionalLight = new THREE.DirectionalLight(0xebf8f9, .1);
@@ -88,17 +89,7 @@ controls.dampingFactor = 0.05;
 const textureLoader = new THREE.TextureLoader();
 const normalMap = textureLoader.load('./images/officeobject_normal.png');
 const metalnessMap = textureLoader.load('./images/officeobject_metallic.png');
-//const emissiveMap = textureLoader.load('./images/officeobject_emission.png');
-/*
-const emissiveFrames = [
-    textureLoader.load('./images/officeobject_emission_1.png'),
-    textureLoader.load('./images/officeobject_emission_2.png'),
-    textureLoader.load('./images/officeobject_emission_3.png'),
-    textureLoader.load('./images/officeobject_emission_4.png'),
-  ];
-  emissiveFrames.forEach(tex => tex.encoding = THREE.sRGBEncoding);
-*/
-
+const roughnessMap = textureLoader.load('./images/officeobject_roughness.png');
 const emissiveMap = textureLoader.load('./images/officeobject_emission_spritesheet.png');
   emissiveMap.encoding = THREE.sRGBEncoding;
   emissiveMap.wrapS = THREE.RepeatWrapping;
@@ -112,20 +103,169 @@ const emissiveMap = textureLoader.load('./images/officeobject_emission_spriteshe
   const exrLoader = new EXRLoader();
   exrLoader.load('./images/small_empty_room_3_1k.exr', (envMap) => {
     envMap.mapping = THREE.EquirectangularReflectionMapping;
+    // Reduce environment map intensity to let material properties show better
+    renderer.toneMappingExposure = 0.25; // Reduced from 0.3
     scene.environment = envMap;
 
 const geometry = new THREE.BoxGeometry(2, 2, 2);
+// Try a different approach with the material settings
 const material = new THREE.MeshStandardMaterial({
   map: texture,
   normalMap: normalMap,
   metalnessMap: metalnessMap,
-  //emissiveMap: emissiveMap,
-  metalness: 1.0,  // Optional: use full metal if you want the metal map to control it
-  roughness: 0.4,   // Adjust for smoother look
+  roughnessMap: roughnessMap,
+  // Adjust these base values to see if they help
+  metalness: 1.0,     // Try a middle value instead of 0
+  roughness: 1.0,     // Try a middle value instead of 0
+  envMapIntensity: 0.5, // Reduce environment map influence
   emissive: new THREE.Color(0xffffff),
   emissiveMap: emissiveMap,
-  emissiveIntensity: 1.5
+  emissiveIntensity: 5.0
 });
+
+/* // Add a debug UI to adjust material properties in real-time
+const debugUI = document.createElement('div');
+debugUI.style.position = 'fixed';
+debugUI.style.top = '20px';
+debugUI.style.right = '20px';
+debugUI.style.backgroundColor = 'rgba(0,0,0,0.7)';
+debugUI.style.padding = '10px';
+debugUI.style.borderRadius = '5px';
+debugUI.style.color = 'white';
+debugUI.style.fontFamily = 'monospace';
+debugUI.style.fontSize = '12px';
+debugUI.style.zIndex = '1000';
+document.body.appendChild(debugUI);
+
+// Create sliders for material properties
+function createSlider(name, min, max, value, onChange) {
+  const container = document.createElement('div');
+  container.style.marginBottom = '10px';
+  
+  const label = document.createElement('div');
+  label.textContent = `${name}: ${value}`;
+  
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = min;
+  slider.max = max;
+  slider.step = (max - min) / 100;
+  slider.value = value;
+  slider.style.width = '100%';
+  
+  slider.addEventListener('input', () => {
+    const val = parseFloat(slider.value);
+    label.textContent = `${name}: ${val.toFixed(2)}`;
+    onChange(val);
+  });
+  
+  container.appendChild(label);
+  container.appendChild(slider);
+  debugUI.appendChild(container);
+  
+  return slider;
+}
+
+// Add material property sliders
+createSlider('Metalness', 0, 1, material.metalness, (val) => {
+  material.metalness = val;
+});
+
+createSlider('Roughness', 0, 1, material.roughness, (val) => {
+  material.roughness = val;
+});
+
+createSlider('EnvMap Intensity', 0, 2, material.envMapIntensity, (val) => {
+  material.envMapIntensity = val;
+});
+
+createSlider('Emissive Intensity', 0, 3, material.emissiveIntensity, (val) => {
+  material.emissiveIntensity = val;
+}); */
+
+// Ensure proper encoding and settings for all maps
+normalMap.encoding = THREE.LinearEncoding; // Normal maps should use linear encoding
+metalnessMap.encoding = THREE.LinearEncoding; // Metalness maps should use linear encoding
+roughnessMap.encoding = THREE.LinearEncoding; // Roughness maps should use linear encoding
+
+// Set anisotropic filtering for better texture quality
+const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+texture.anisotropy = maxAnisotropy;
+normalMap.anisotropy = maxAnisotropy;
+metalnessMap.anisotropy = maxAnisotropy;
+roughnessMap.anisotropy = maxAnisotropy;
+emissiveMap.anisotropy = maxAnisotropy;
+
+// Ensure textures are properly wrapped
+texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+metalnessMap.wrapS = metalnessMap.wrapT = THREE.RepeatWrapping;
+roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
+
+// Log to confirm maps are loaded correctly
+console.log('Texture maps loaded:', {
+  diffuse: texture ? 'Yes' : 'No',
+  normal: normalMap ? 'Yes' : 'No',
+  metalness: metalnessMap ? 'Yes' : 'No',
+  roughness: roughnessMap ? 'Yes' : 'No',
+  emissive: emissiveMap ? 'Yes' : 'No'
+});
+
+// Debug UV mapping - this can help identify if there are UV mapping issues
+geometry.computeVertexNormals(); // Ensure normals are computed for proper lighting
+console.log('BoxGeometry UV mapping:', geometry.attributes.uv ? 'Present' : 'Missing');
+
+// Add debug info to check texture formats
+console.log('Texture formats:', {
+  metalness: metalnessMap.format,
+  roughness: roughnessMap.format
+});
+
+// Add a helper function to check if textures are inverted
+function checkTextureValues(texture, name) {
+  // Create a temporary canvas to read pixel data
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const img = texture.image;
+  
+  if (!img) {
+    console.log(`${name} texture image not loaded yet`);
+    return;
+  }
+  
+  canvas.width = img.width;
+  canvas.height = img.height;
+  ctx.drawImage(img, 0, 0);
+  
+  try {
+    // Sample a few pixels to check values
+    const data = ctx.getImageData(0, 0, img.width, img.height).data;
+    let sum = 0;
+    let count = 0;
+    
+    // Sample every 10th pixel
+    for (let i = 0; i < data.length; i += 40) {
+      sum += data[i];
+      count++;
+    }
+    
+    const avg = sum / count;
+    console.log(`${name} texture average value: ${avg} (0-255)`);
+    
+    // If average is very high, texture might be inverted
+    if (avg > 200) {
+      console.log(`WARNING: ${name} texture might be inverted (values are very high)`);
+    }
+  } catch (e) {
+    console.error(`Error checking ${name} texture:`, e);
+  }
+}
+
+// Check texture values after a short delay to ensure they're loaded
+setTimeout(() => {
+  checkTextureValues(metalnessMap, 'Metalness');
+  checkTextureValues(roughnessMap, 'Roughness');
+}, 1000);
 
   const cube = new THREE.Mesh(geometry, material);
   scene.add(cube);
@@ -303,8 +443,7 @@ stationSelect.addEventListener('change', () => {
     playButton.textContent = 'Pause';
     playButton.style.backgroundColor = '#dc3545';
   }
-  // 🔁 Change mood textures based on selected station - commented out as function is not defined
-  // switchMoodTextures(selected.mood);
+
   //updateNowPlaying(); // Refresh song info
 });
 
@@ -384,12 +523,6 @@ audioElement.addEventListener('error', (e) => {
 // Create analyzer for visualizations
 const analyser = new THREE.AudioAnalyser(sound, 128);
 
-  // Event listeners for the play button - using the dynamically created playButton
-  // (The original playPauseButton from DOM is no longer used)
-  // playButton already has its own click event handler above
-
-  // Volume slider event listener is already defined above
-
   let currentTile = 0;
   let lastFrameTime = 0;
   const frameDuration = 400;
@@ -408,7 +541,7 @@ const analyser = new THREE.AudioAnalyser(sound, 128);
   const avg = analyser.getAverageFrequency();
 
   // Emissive intensity from volume
-  material.emissiveIntensity = 0.5 + (avg / 256) * 1.5;
+  material.emissiveIntensity = 0.5 + (avg / 256) * 1.8;
 
   // Smooth hue cycling based on time and volume
   const hue = (time * 0.0001 + avg / 512) % 1;
