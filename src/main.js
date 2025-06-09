@@ -19,25 +19,13 @@ document.getElementById('startButton').addEventListener('click', async () => {
     }
   
     document.getElementById('startButton').style.display = 'none';
-    const audioControls = document.getElementById('audioControls');
-    audioControls.style.display = 'block'; // Show audio controls
     
-    // Ensure slider is updated after controls are visible and audio is likely to be set up
-    // We'll also set it again in the audio.load callback for robustness
-    const volumeSliderElement = document.getElementById('volumeSlider');
-    if (volumeSliderElement) {
-        // The audio object might not be fully ready here, but we can set the default HTML value
-        // The more reliable update will be in the audio.load callback
-    }
-
     await init(); // Start the fun!
   });
   
   async function init() {
 
-// Audio Controls - moved element retrieval inside init to ensure they are accessed after DOM is ready
-const playPauseButton = document.getElementById('playPauseButton');
-const volumeSlider = document.getElementById('volumeSlider');
+// Audio setup is handled by the SOMA FM integration below
 
 function loadSVGTexture(svgUrl, width = 1024, height = 1024) {
   return new Promise((resolve) => {
@@ -146,40 +134,261 @@ const material = new THREE.MeshStandardMaterial({
 const listener = new THREE.AudioListener();
 camera.add(listener);
 
-const audio = new THREE.Audio(listener);
-const audioLoader = new THREE.AudioLoader();
+// 🔊 Injected SOMA FM Audio Integration
+// Create a container for audio controls
+const audioControlsContainer = document.createElement('div');
+audioControlsContainer.style.position = 'fixed';
+audioControlsContainer.style.bottom = '20px';
+audioControlsContainer.style.left = '20px';
+audioControlsContainer.style.zIndex = '1000';
+audioControlsContainer.style.display = 'flex';
+audioControlsContainer.style.alignItems = 'center';
+audioControlsContainer.style.gap = '10px';
+document.body.appendChild(audioControlsContainer);
 
-audioLoader.load('./audio/neonawakening.mp3', function(buffer) {
-  audio.setBuffer(buffer);
-  audio.setLoop(true);
-  audio.setVolume(0.5); // Set initial volume to 0.5
-  audio.play();
+// Create play button
+const playButton = document.createElement('button');
+playButton.textContent = 'Play Music';
+playButton.style.padding = '8px 16px';
+playButton.style.backgroundColor = '#9e552f';
+playButton.style.color = 'white';
+playButton.style.border = 'none';
+playButton.style.borderRadius = '4px';
+playButton.style.cursor = 'pointer';
+playButton.style.fontSize = '14px';
+audioControlsContainer.appendChild(playButton);
 
-  // Update UI elements after audio is loaded and properties are set
-  if (playPauseButton) { 
-    playPauseButton.textContent = 'Pause'; // Audio starts playing
-  }
-  if (volumeSlider) { 
-    volumeSlider.value = 0.5; // Explicitly set slider to 0.5
-  }
+const somaStations = [
+  { name: 'Groove Salad (Chill)', stream: 'https://ice4.somafm.com/groovesalad-128-mp3', info: 'https://api.somafm.com/channels/groovesalad.json', mood: 'chill' },
+  { name: 'Secret Agent (Jazz)', stream: 'https://ice6.somafm.com/secretagent-128-mp3', info: 'https://api.somafm.com/channels/secretagent.json', mood: 'jazz' },
+  { name: 'Metal Detector (Metal)', stream: 'https://ice1.somafm.com/metal-128-mp3', info: 'https://api.somafm.com/channels/metal.json', mood: 'metal' },
+  { name: 'Drone Zone', stream: 'https://ice1.somafm.com/dronezone-128-mp3', info: 'https://api.somafm.com/channels/dronezone.json', mood: 'drone' },
+  { name: 'DEF CON Radio', stream: 'https://ice4.somafm.com/defcon-128-mp3', info: 'https://api.somafm.com/channels/defcon.json', mood: 'defcon' },
+  { name: 'Beat Blender', stream: 'https://ice2.somafm.com/beatblender-128-mp3', info: 'https://api.somafm.com/channels/beatblender.json', mood: 'beat' },
+  { name: 'Doomed (Dark)', stream: 'https://ice6.somafm.com/doomed-128-mp3', info: 'https://api.somafm.com/channels/doomed.json', mood: 'dark' },
+  { name: 'Dub Step Beyond', stream: 'https://ice2.somafm.com/dubstep-128-mp3', info: 'https://api.somafm.com/channels/dubstep.json', mood: 'dubstep' },
+  { name: 'Indie Pop Rocks', stream: 'https://ice1.somafm.com/indiepop-128-mp3', info: 'https://api.somafm.com/channels/indiepop.json', mood: 'indie' },
+  { name: 'Mission Control', stream: 'https://ice6.somafm.com/missioncontrol-128-mp3', info: 'https://api.somafm.com/channels/missioncontrol.json', mood: 'space' }
+];
+
+// Dropdown to select station
+const stationSelect = document.createElement('select');
+stationSelect.style.padding = '6px';
+stationSelect.style.borderRadius = '4px';
+stationSelect.style.cursor = 'pointer';
+stationSelect.style.fontSize = '12px';
+stationSelect.style.backgroundColor = '#333';
+stationSelect.style.color = '#fff';
+
+somaStations.forEach((station, index) => {
+  const option = document.createElement('option');
+  option.value = index.toString();
+  option.textContent = station.name;
+  stationSelect.appendChild(option);
+});
+audioControlsContainer.appendChild(stationSelect);
+
+// Create volume slider
+const volumeSlider = document.createElement('input');
+volumeSlider.type = 'range';
+volumeSlider.min = '0';
+volumeSlider.max = '1';
+volumeSlider.step = '0.1';
+volumeSlider.value = '0.5';
+volumeSlider.style.width = '100px';
+// volumeSlider.style.accentColor = '#007bff'; // Removed to rely on CSS for thumb
+volumeSlider.style.cursor = 'pointer';
+volumeSlider.style.pointerEvents = 'auto';
+volumeSlider.id = 'volumeSlider'; // Add ID for CSS targeting
+// Explicitly apply styles for track and appearance from index.html
+volumeSlider.style.webkitAppearance = 'none';
+volumeSlider.style.appearance = 'none';
+volumeSlider.style.height = '8px';
+volumeSlider.style.borderRadius = '4px';
+volumeSlider.style.background = '#444'; // Track color
+volumeSlider.style.outline = 'none';
+
+// Create volume label
+const volumeLabel = document.createElement('span');
+volumeLabel.textContent = 'Volume: 50%';
+volumeLabel.style.color = 'white';
+volumeLabel.style.fontSize = '14px';
+volumeLabel.style.marginRight = '5px';
+
+// Add volume label and slider to container
+//audioControlsContainer.appendChild(volumeLabel);
+audioControlsContainer.appendChild(volumeSlider);
+
+// Create HTML audio element for streaming
+const audioElement = document.createElement('audio');
+audioElement.style.display = 'none'; // Hide the audio element
+document.body.appendChild(audioElement);
+
+// URL of the stream
+const streamUrl = 'https://ice4.somafm.com/groovesalad-128-mp3';
+audioElement.src = streamUrl;
+audioElement.crossOrigin = 'anonymous';
+audioElement.preload = 'none'; // Don't preload until user clicks play
+
+// Connect the HTML audio element to Three.js audio system
+const sound = new THREE.Audio(listener);
+sound.setMediaElementSource(audioElement);
+
+// Track playing state
+let isPlaying = false;
+
+// Add loading indicator CSS
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+`;
+document.head.appendChild(style);
+
+// Play/pause button event listener
+playButton.addEventListener('click', function() {
+    if (listener.context.state === 'suspended') {
+        listener.context.resume();
+    }
+    
+    if (!isPlaying) {
+        // Show loading state
+        playButton.textContent = 'Loading...';
+        playButton.disabled = true;
+        playButton.style.backgroundColor = '#6c757d';
+        
+        // Add loading indicator
+        const loadingIndicator = document.createElement('span');
+        loadingIndicator.textContent = ' ⟳';
+        loadingIndicator.style.display = 'inline-block';
+        loadingIndicator.style.animation = 'spin 1s linear infinite';
+        playButton.appendChild(loadingIndicator);
+        
+        // Start loading the audio
+        audioElement.load();
+        
+        // Play when ready
+        audioElement.play().then(() => {
+            isPlaying = true;
+            playButton.textContent = 'Pause';
+            playButton.disabled = false;
+            playButton.style.backgroundColor = '#dc3545'; // Red for pause
+        }).catch(error => {
+            console.error('Error playing audio:', error);
+            playButton.textContent = 'Play Music';
+            playButton.disabled = false;
+            playButton.style.backgroundColor = '#824323';
+        });
+    } else {
+        audioElement.pause();
+        isPlaying = false;
+        playButton.textContent = 'Play Music';
+        playButton.style.backgroundColor = '#9e552f'; // Blue for play
+    }
 });
 
-const analyser = new THREE.AudioAnalyser(audio, 128);
+let selectedStationIndex = 0;
+audioElement.src = somaStations[selectedStationIndex].stream;
 
-  // Event listeners are attached to elements retrieved at the start of init
-  playPauseButton.addEventListener('click', () => {
-    if (audio.isPlaying) {
-      audio.pause();
-      playPauseButton.textContent = 'Play';
-    } else {
-      audio.play();
-      playPauseButton.textContent = 'Pause';
+stationSelect.addEventListener('change', () => {
+  selectedStationIndex = parseInt(stationSelect.value);
+  const selected = somaStations[selectedStationIndex];
+
+  audioElement.src = selected.stream;
+  audioElement.load();
+  if (isPlaying) {
+    audioElement.play();
+    playButton.textContent = 'Pause';
+    playButton.style.backgroundColor = '#dc3545';
+  }
+  // 🔁 Change mood textures based on selected station - commented out as function is not defined
+  // switchMoodTextures(selected.mood);
+  //updateNowPlaying(); // Refresh song info
+});
+
+// Volume slider event listener - using 'input' for continuous update
+volumeSlider.addEventListener('input', function() {
+    if (listener.context.state === 'suspended') {
+        listener.context.resume().then(() => {
+            console.log('AudioContext resumed on volume input.');
+        }).catch(e => console.error('Error resuming AudioContext on volume input:', e));
     }
-  });
 
-  volumeSlider.addEventListener('input', () => {
-    audio.setVolume(parseFloat(volumeSlider.value));
-  });
+    // On mobile, if audio is paused but playback is intended, try to play again.
+    if (isTouchDevice && audioElement.paused && isPlaying) {
+        audioElement.play().then(() => {
+            console.log('Audio re-played on volume input (mobile).');
+        }).catch(e => console.error('Error re-playing audio on volume input (mobile):', e));
+    }
+
+    const volume = parseFloat(volumeSlider.value);
+    audioElement.volume = volume;
+    volumeLabel.textContent = `Volume: ${Math.round(volume * 100)}%`;
+    console.log('Volume set by input event to:', audioElement.volume);
+});
+
+// For touch devices, also try to resume context and play on touchstart of the slider
+if (isTouchDevice) {
+    volumeSlider.addEventListener('touchstart', function() {
+        console.log('Volume slider touchstart (mobile)');
+        if (listener.context.state === 'suspended') {
+            listener.context.resume().then(() => {
+                console.log('AudioContext resumed on volume touchstart (mobile).');
+            }).catch(e => console.error('Error resuming context on volume touchstart (mobile):', e));
+        }
+        // If playback is intended but audio is paused, try to play.
+        if (audioElement.paused && isPlaying) {
+            audioElement.play().then(() => {
+                console.log('Audio played on volume touchstart (mobile).');
+            }).catch(e => console.error('Error playing audio on volume touchstart (mobile):', e));
+        }
+    }, { passive: true }); // Use passive listener as we are not calling preventDefault
+}
+
+// Prevent mousedown on slider from propagating to PointerLockControls
+volumeSlider.addEventListener('mousedown', function(event) {
+    event.stopPropagation();
+});
+
+// Handle audio loading events
+audioElement.addEventListener('waiting', () => {
+    playButton.textContent = 'Loading...';
+    playButton.disabled = true;
+    playButton.style.backgroundColor = '#6c757d';
+    
+    // Add loading indicator if not already present
+    if (!playButton.querySelector('span')) {
+        const loadingIndicator = document.createElement('span');
+        loadingIndicator.textContent = ' ⟳';
+        loadingIndicator.style.display = 'inline-block';
+        loadingIndicator.style.animation = 'spin 1s linear infinite';
+        playButton.appendChild(loadingIndicator);
+    }
+});
+
+audioElement.addEventListener('playing', () => {
+    playButton.textContent = 'Pause';
+    playButton.disabled = false;
+    playButton.style.backgroundColor = '#dc3545';
+});
+
+audioElement.addEventListener('error', (e) => {
+    console.error('Audio error:', e);
+});
+
+
+// Using SOMA FM streaming audio instead of local audio file
+
+// Create analyzer for visualizations
+const analyser = new THREE.AudioAnalyser(sound, 128);
+
+  // Event listeners for the play button - using the dynamically created playButton
+  // (The original playPauseButton from DOM is no longer used)
+  // playButton already has its own click event handler above
+
+  // Volume slider event listener is already defined above
 
   let currentTile = 0;
   let lastFrameTime = 0;
@@ -229,4 +438,8 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
 });
-  }
+
+// Define touch device detection
+const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+
+} // Close the init() function
