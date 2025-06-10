@@ -117,13 +117,13 @@ const material = new THREE.MeshStandardMaterial({
   // Adjust these base values to see if they help
   metalness: 1.0,     // Try a middle value instead of 0
   roughness: 1.0,     // Try a middle value instead of 0
-  envMapIntensity: 0.5, // Reduce environment map influence
+  envMapIntensity: 1.0, // Reduce environment map influence
   emissive: new THREE.Color(0xffffff),
   emissiveMap: emissiveMap,
   emissiveIntensity: 5.0
 });
 
-/* // Add a debug UI to adjust material properties in real-time
+// Add a debug UI to adjust material properties in real-time
 const debugUI = document.createElement('div');
 debugUI.style.position = 'fixed';
 debugUI.style.top = '20px';
@@ -179,9 +179,9 @@ createSlider('EnvMap Intensity', 0, 2, material.envMapIntensity, (val) => {
   material.envMapIntensity = val;
 });
 
-createSlider('Emissive Intensity', 0, 3, material.emissiveIntensity, (val) => {
+createSlider('Emissive Intensity', 0, 5, material.emissiveIntensity, (val) => {
   material.emissiveIntensity = val;
-}); */
+});
 
 // Ensure proper encoding and settings for all maps
 normalMap.encoding = THREE.LinearEncoding; // Normal maps should use linear encoding
@@ -533,25 +533,133 @@ const analyser = new THREE.AudioAnalyser(sound, 128);
     emissiveMap.offset.set(col / tilesHoriz, 1 - (row + 1) / tilesVert);
   }
 
+  // Beat detection variables
+  let beatDetector = {
+    threshold: 1.15,  // How much the current value must exceed the average to be a beat
+    decay: 0.98,      // How quickly the average decreases
+    average: 0,       // Running average of bass frequencies
+    wasBeating: false,// Whether we were in a beat last frame
+    beatTime: 0,      // When the last beat occurred
+    beatCount: 0,     // Count of beats detected
+    beatInterval: 500 // Minimum time between beats (ms)
+  };
+
+  // Add beat detection controls to the debug UI
+  createSlider('Beat Threshold', 1.0, 2.0, beatDetector.threshold, (val) => {
+    beatDetector.threshold = val;
+  });
+  
+  createSlider('Beat Decay', 0.9, 0.999, beatDetector.decay, (val) => {
+    beatDetector.decay = val;
+  });
+  
+  createSlider('Beat Interval', 100, 1000, beatDetector.beatInterval, (val) => {
+    beatDetector.beatInterval = val;
+  });
+  
+  // Add a button to toggle beat visualization
+  const beatVisToggle = document.createElement('button');
+  beatVisToggle.textContent = 'Beat Visualization: ON';
+  beatVisToggle.style.width = '100%';
+  beatVisToggle.style.padding = '5px';
+  beatVisToggle.style.marginTop = '10px';
+  beatVisToggle.style.backgroundColor = '#4CAF50';
+  beatVisToggle.style.border = 'none';
+  beatVisToggle.style.borderRadius = '4px';
+  beatVisToggle.style.color = 'white';
+  beatVisToggle.style.cursor = 'pointer';
+  
+  let beatVisualizationEnabled = true;
+  
+  beatVisToggle.addEventListener('click', () => {
+    beatVisualizationEnabled = !beatVisualizationEnabled;
+    beatVisToggle.textContent = `Beat Visualization: ${beatVisualizationEnabled ? 'ON' : 'OFF'}`;
+    beatVisToggle.style.backgroundColor = beatVisualizationEnabled ? '#4CAF50' : '#f44336';
+  });
+  
+  debugUI.appendChild(beatVisToggle);
+
   // Animate like it's auditioning for TRON
   function animate(time) {
     requestAnimationFrame(animate);
 
     const data = analyser.getFrequencyData();
-  const avg = analyser.getAverageFrequency();
-
-  // Emissive intensity from volume
-  material.emissiveIntensity = 0.5 + (avg / 256) * 1.8;
-
-  // Smooth hue cycling based on time and volume
-  const hue = (time * 0.0001 + avg / 512) % 1;
-  material.emissive.setHSL(hue, 1.0, 0.5);
-
-    if (time - lastFrameTime > frameDuration) {
-        lastFrameTime = time;
+    const avg = analyser.getAverageFrequency();
+    
+    // Beat detection - focus on bass frequencies (first few bins)
+    const bassAvg = (data[0] + data[1] + data[2] + data[3]) / 4;
+    
+    // Update the running average
+    if (beatDetector.average === 0) {
+      beatDetector.average = bassAvg;
+    } else {
+      beatDetector.average = beatDetector.average * beatDetector.decay + bassAvg * (1 - beatDetector.decay);
+    }
+    
+    // Check if we have a beat
+    const isBeat = bassAvg > beatDetector.threshold * beatDetector.average && 
+                  time - beatDetector.beatTime > beatDetector.beatInterval;
+    
+    // If we just detected a beat
+    if (isBeat && !beatDetector.wasBeating) {
+      beatDetector.beatTime = time;
+      beatDetector.beatCount++;
+      
+      if (beatVisualizationEnabled) {
+        // Pulse the emissive intensity on beat
+        material.emissiveIntensity = 5.0; // Strong flash on beat
+        
+        // Also pulse the cube scale on beat
+        cube.scale.set(1.1, 1.1, 1.1);
+        
+        // Change sprite frame on beat
         currentTile = (currentTile + 1) % numTiles;
         updateSpriteFrame();
       }
+    } else {
+      // Smooth decay of emissive intensity between beats
+      if (beatVisualizationEnabled) {
+        material.emissiveIntensity = Math.max(
+          0.5 + (avg / 256) * 0.8,  // Base level from overall volume
+          material.emissiveIntensity * 0.95  // Decay from beat pulse
+        );
+        
+        // Smooth return to normal scale
+        cube.scale.x = THREE.MathUtils.lerp(cube.scale.x, 1.0, 0.1);
+        cube.scale.y = THREE.MathUtils.lerp(cube.scale.y, 1.0, 0.1);
+        cube.scale.z = THREE.MathUtils.lerp(cube.scale.z, 1.0, 0.1);
+      }
+    }
+    
+    beatDetector.wasBeating = isBeat;
+    
+    // Display beat info in debug UI
+    if (!document.getElementById('beatInfo')) {
+      const beatInfo = document.createElement('div');
+      beatInfo.id = 'beatInfo';
+      beatInfo.style.marginTop = '10px';
+      beatInfo.style.borderTop = '1px solid #555';
+      beatInfo.style.paddingTop = '10px';
+      debugUI.appendChild(beatInfo);
+    }
+    
+    document.getElementById('beatInfo').innerHTML = `
+      Beats: ${beatDetector.beatCount}<br>
+      Bass: ${Math.round(bassAvg)}<br>
+      Avg: ${Math.round(beatDetector.average)}<br>
+      Ratio: ${(bassAvg / beatDetector.average).toFixed(2)}
+    `;
+    
+    // Smooth hue cycling based on time and volume
+    const hue = (time * 0.0001 + avg / 512) % 1;
+    material.emissive.setHSL(hue, 1.0, 0.5);
+
+    // Only update sprite frame based on time if beat visualization is disabled
+    if (!beatVisualizationEnabled && time - lastFrameTime > frameDuration) {
+        lastFrameTime = time;
+        currentTile = (currentTile + 1) % numTiles;
+        updateSpriteFrame();
+    }
 
     cube.rotation.x = time * 0.0005;
     cube.rotation.y = time * 0.0004;
